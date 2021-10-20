@@ -27,7 +27,7 @@ const users = [];
 io.use((socket, next) => {
 	if (socket.handshake.headers && socket.handshake.headers.authorization) {
 		try {
-			tokenData = jwt.decode(
+			const tokenData = jwt.decode(
 				socket.handshake.headers.authorization,
 				process.env.SECRET
 			);
@@ -38,6 +38,7 @@ io.use((socket, next) => {
 
 			socket.user = userData;
 			users[socket.id] = socket;
+			next();
 		} catch (error) {
 			next(new Error('Autentication error'));
 		}
@@ -47,8 +48,10 @@ io.use((socket, next) => {
 });
 
 io.on('connection', async (socket) => {
-	// sends unread notifications to user
-	socket.on('get_unread', (data) => {
+	//#region notifications
+
+	// sends all unread notifications to user
+	socket.on('get_unread', async (data) => {
 		try {
 			// get talking with user sockets
 			const userSockets = Object.values(users).filter(
@@ -56,10 +59,10 @@ io.on('connection', async (socket) => {
 			);
 
 			// get unread list
-			const uread = notificationApp.getUnread._invoke();
+			const unread = await notificationApp.getUnread._invoke(data.user_id);
 
 			userSockets.forEach((s) => {
-				s.emit('unread_notifications', uread);
+				s.emit('unread_notifications', unread);
 			});
 		} catch (error) {
 			console.log(error);
@@ -73,6 +76,7 @@ io.on('connection', async (socket) => {
 			const userSockets = Object.values(users).filter(
 				(u) => u.user.user_id == data.user_id
 			);
+
 			userSockets.forEach((s) => {
 				s.emit('unread_notifications', data);
 			});
@@ -90,6 +94,10 @@ io.on('connection', async (socket) => {
 			console.log(error);
 		}
 	});
+	//#endregion notifications
+
+	//#region chat
+	//#endregion chat
 
 	socket.on('disconnect', async () => {
 		try {
