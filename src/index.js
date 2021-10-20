@@ -1,4 +1,3 @@
-//const db = require('./services/database');
 const jwt = require('jwt-simple');
 //const moment = require('moment');
 // const errorHandling = require("./errorHandling");
@@ -24,17 +23,30 @@ const io = socketio(server, {
 
 const users = [];
 
+// authorization
+io.use((socket, next) => {
+	if (socket.handshake.headers && socket.handshake.headers.authorization) {
+		try {
+			tokenData = jwt.decode(
+				socket.handshake.headers.authorization,
+				process.env.SECRET
+			);
+
+			const userData = {
+				user_id: tokenData.user_id,
+			};
+
+			socket.user = userData;
+			users[socket.id] = socket;
+		} catch (error) {
+			next(new Error('Autentication error'));
+		}
+	} else {
+		next(new Error('Autentication error'));
+	}
+});
+
 io.on('connection', async (socket) => {
-	const token = socket.handshake.headers.authorization;
-	const tokenData = jwt.decode(token, process.env.SECRET);
-
-	const userData = {
-		user_id: tokenData.user_id,
-	};
-
-	socket.user = userData;
-	users[socket.id] = socket;
-
 	// sends unread notifications to user
 	socket.on('get_unread', (data) => {
 		try {
@@ -74,6 +86,16 @@ io.on('connection', async (socket) => {
 		try {
 			// persist on db
 			notificationApp.markRead._invoke(data);
+		} catch (error) {
+			console.log(error);
+		}
+	});
+
+	socket.on('disconnect', async () => {
+		try {
+			console.log(`socket ${socket.id} disconnected`);
+			delete users[socket.id];
+			//socket.broadcast.emit('deactivate user', socket.user.id_user);
 		} catch (error) {
 			console.log(error);
 		}
